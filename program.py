@@ -120,6 +120,9 @@ def cmd_install(c, model=None):
     install_env(c, model)
     sync_source(c, c["head"])
     sync_source(c, c["worker"])
+    # 与 deepseek-flash 的 install 语义一致：install 是覆盖部署，始终先停旧容器。
+    log("install is destructive to the running service: stopping existing containers")
+    remote_script(c, "stop")
     remote_script(c, "serve")
 
 
