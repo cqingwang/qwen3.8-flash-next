@@ -1,0 +1,64 @@
+# Qwen3.8-Flash-Next 双机部署配置（本地部署入口的 SSOT）
+# deploy.sh --install 会把当前仓库同步到 repo 指定的双机目录。
+common:
+  user: chan
+  repo: /opt/qwen3.8-flash-next
+  model: /opt/models/RadixArk/Qwen3.8-Flash-Next-NVFP4
+  api_url: http://127.0.0.1:8888/v1/models
+  port: 8888
+head:
+  hostname: spark-a
+  ssh: chan@192.168.2.180
+  management_ip: 192.168.2.180
+worker:
+  hostname: spark-b
+  ssh: chan@192.168.2.161
+  management_ip: 192.168.2.161
+
+# dspark/start.sh 的唯一有效环境配置；program.py --install/--gen-env
+# 从这里完整生成 dspark/.env，不读取或合并已有 .env。
+env:
+  MODEL_DIR: /opt/models/RadixArk/Qwen3.8-Flash-Next-NVFP4
+  WORKER_SSH: chan@192.168.2.161
+  WORKER_HOST: 192.168.2.161
+  HEAD_CX7_IP: 10.100.240.1
+  WORKER_CX7_IP: 10.100.240.2
+  HEAD_CX7_IF: enp1s0f0np0
+  WORKER_CX7_IF: enp1s0f0np0
+  HEAD_CX7_IB: rocep1s0f0
+  WORKER_CX7_IB: rocep1s0f0
+  PORT: 8888
+  HOST_BIND: 0.0.0.0
+  DIST_PORT: 26400
+  SERVED_MODEL_NAME: Qwen3.8-Flash-Next-NVFP4
+  MEM_FRACTION_STATIC: 0.70
+  CONTEXT_LENGTH: 262144
+  CHUNKED_PREFILL_SIZE: 4096
+  MAX_RUNNING_REQUESTS: 16
+  SPEC_STEPS: 3
+  SPEC_TOPK: 1
+  SPEC_DRAFT: 4
+  PLE_OFFLOAD:
+  MAMBA_RADIX_CACHE_STRATEGY: extra_buffer
+  MAMBA_TRACK_INTERVAL: 64
+  MAMBA_FULL_MEMORY_RATIO:
+  ENABLE_DECODE_GRAPHS: 1
+  CUDA_GRAPH_BS: 1 2 3 4 5 6 7 8 10 12 14 16
+  ATTENTION_BACKEND: flashinfer
+  KV_CACHE_DTYPE:
+  FP4_GEMM_BACKEND:
+  LINEAR_ATTN_PREFILL_BACKEND:
+  LINEAR_ATTN_DECODE_BACKEND:
+  KERNEL_PATCH: 1
+  BASE_IMAGE: lmsysorg/sglang:qwen38flashnext
+  PATCHED_IMAGE: qwen38-flashnext-dspark:local
+  DOWNLOAD_MODE: rsync
+  USE_HOST_NCCL: 1
+  WAIT_TIMEOUT_MIN: 90
+  NCCL_DEBUG: WARN
+  NCCL_CROSS_NIC: 0
+  CPUSET: 5-9,15-19
+  REASONING_PARSER: auto
+  TOOL_CALL_PARSER: auto
+  HF_REVISION:
+  EXTRA_ARGS:

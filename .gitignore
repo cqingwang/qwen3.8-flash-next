@@ -7,3 +7,4 @@
 .download.log
 .env
 *.bak
+.idea
