@@ -8,10 +8,10 @@
 - worker：`spark-b`，`chan@192.168.2.161`
 - 项目源码部署目录：两台机器均为 `/opt/qwen3.8-flash-next`
 - 模型目录：两台机器均为 `/opt/models/RadixArk/Qwen3.8-Flash-Next-NVFP4`
-- 容器模型目录：`/models/RadixArk/Qwen3.8-Flash-Next-NVFP4`；服务名自动取模型目录相对 `/opt/models` 的路径，即 `RadixArk/Qwen3.8-Flash-Next-NVFP4`
+- 容器模型目录：`/models/RadixArk/Qwen3.8-Flash-Next-NVFP4`；服务名自动取模型目录最后一级，即 `Qwen3.8-Flash-Next-NVFP4`
 - API：head 的 `0.0.0.0:8888/v1`
 
-本地工作区是源码源。`install` 会先将项目同步到 head 和 worker，再从 head 调用 `dspark/start.sh`。模型不会复制进项目目录；子模块的本地模型模式会把 head 的模型目录断点 rsync 到 worker，并将 `/opt/models` 以只读方式挂载到容器 `/models`，保留作者与模型目录层级。服务名由实际 `MODEL_DIR` 自动生成，不再单独维护别名。
+本地工作区是源码源。`install` 会先将项目同步到 head 和 worker，再从 head 调用 `dspark/start.sh`。模型不会复制进项目目录；子模块的本地模型模式会把 head 的模型目录断点 rsync 到 worker，并将 `/opt/models` 以只读方式挂载到容器 `/models`，保留作者与模型目录层级。服务名由实际 `MODEL_DIR` 的最后一级自动生成，不再单独维护别名。
 
 ## 前置条件
 
