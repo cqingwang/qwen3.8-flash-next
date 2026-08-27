@@ -46,6 +46,8 @@
 
 `config.yaml` 是外层部署 SSOT；其中 `env:` 保存 `dspark/start.sh` 的全部有效环境参数。`deploy.sh --gen-env`/`--install` 由 `program.py` 完整重生成 `dspark/.env`，不会读取或合并旧 `.env`，因此不会出现第二份生效配置。`dspark/.env.example` 仅作为子模块独立运行时的参考模板；shell 环境变量仍可覆盖 `.env` 中的值。
 
+接入客户段 agent 时，模型条目的 `contextWindow` 必须同步设置为 `100000`，并在 agent 自身的 `config.yaml` 中保持 `compression.enabled: true`。前者已在 `dspark/README.md` 的完整 pi 示例中固定；后者属于 agent 会话配置，不由本仓库的 SGLang 部署配置读取。修改后需要新建 agent 会话，旧会话不会自动缩短已经累积的历史。
+
 如果远端直接执行子模块：
 
 ```bash
