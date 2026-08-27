@@ -7,6 +7,7 @@
 import argparse
 import os
 import shlex
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -43,7 +44,7 @@ def run(argv, *, check=True, capture=False):
 
 
 def ssh(target, command, *, check=True, capture=False):
-    return run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", target, command], check=check, capture=capture)
+    return run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "StrictHostKeyChecking=accept-new", target, command], check=check, capture=capture)
 
 
 def shell_quote(value):
@@ -58,17 +59,31 @@ def constants(config):
         "model": common["model"],
         "api_url": common["api_url"],
         "head": head["ssh"],
+        "head_hostname": head["hostname"],
         "worker": worker["ssh"],
         "port": common.get("port", "8888"),
         "env": config.get("env", {}),
     }
 
 
+def on_head(c):
+    """head 本机直接执行，避免对自身发起 SSH 和 host-key 校验。"""
+    return socket.gethostname() == c["head_hostname"] or (
+        os.path.abspath(os.path.dirname(__file__)) == os.path.abspath(c["repo"])
+    )
+
+
 def sync_source(c, target):
     """本地源码是 SSOT；排除运行时缓存、日志和 Git 元数据。"""
     source = str(Path(__file__).resolve().parent) + "/"
     destination = f"{target}:{c['repo']}/"
-    ssh(target, f"sudo mkdir -p {shell_quote(c['repo'])} && sudo chown {shell_quote(c['user'])}:{shell_quote(c['user'])} {shell_quote(c['repo'])}")
+    if target == c["head"] and on_head(c):
+        run(["sudo", "mkdir", "-p", c["repo"]])
+        run(["sudo", "chown", f"{c['user']}:{c['user']}", c["repo"]])
+        log(f"source already at head:{c['repo']}; skip self-rsync")
+        return
+    else:
+        ssh(target, f"sudo mkdir -p {shell_quote(c['repo'])} && sudo chown {shell_quote(c['user'])}:{shell_quote(c['user'])} {shell_quote(c['repo'])}")
     excludes = ["--exclude=.git", "--exclude=.cache", "--exclude=*.log", "--exclude=.sglang.pid"]
     run(["rsync", "-a", "--delete", *excludes, "-e", "ssh -o BatchMode=yes -o ConnectTimeout=10", source, destination])
     log(f"source synced -> {target}:{c['repo']}")
@@ -78,6 +93,8 @@ def remote_script(c, action, extra=()):
     script = f"{c['repo']}/dspark/start.sh"
     args = " ".join(shell_quote(item) for item in (action, *extra))
     command = f"cd {shell_quote(c['repo'])} && chmod +x dspark/start.sh dspark/stop.sh && {shell_quote(script)} {args}"
+    if on_head(c):
+        return run(["bash", "-lc", command])
     return ssh(c["head"], command)
 
 
