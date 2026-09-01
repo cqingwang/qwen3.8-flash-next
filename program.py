@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Qwen3.8-Flash-Next 双机部署编排。
 
-本文件只负责本地源码同步、远端命令转发和部署配置；SGLang 的实际实现
+本文件只负责本地源码同步、vLLM 环境生成和远端命令转发；实际启动逻辑
 全部归当前仓库 dspark 子模块的 start.sh/stop.sh。
 """
 import argparse
@@ -90,9 +90,20 @@ def sync_source(c, target):
 
 
 def remote_script(c, action, extra=()):
-    script = f"{c['repo']}/dspark/start.sh"
-    args = " ".join(shell_quote(item) for item in (action, *extra))
-    command = f"cd {shell_quote(c['repo'])} && chmod +x dspark/start.sh dspark/stop.sh && {shell_quote(script)} {args}"
+    repo = shell_quote(c["repo"])
+    if action == "launch":
+        command = f"cd {repo} && chmod +x dspark/start.sh dspark/stop.sh && ./dspark/start.sh --launch"
+    elif action == "stop":
+        command = f"cd {repo} && chmod +x dspark/stop.sh && ./dspark/stop.sh"
+    elif action == "status":
+        command = "docker ps -a --filter name=^/vllm-fn$ --format 'table {{.Names}}\\t{{.Status}}'"
+    elif action == "logs":
+        lines = extra[0] if extra else "120"
+        command = f"docker logs --tail {shell_quote(lines)} vllm-fn"
+    elif action == "smoke":
+        command = f"curl -fsS http://127.0.0.1:{shell_quote(c['port'])}/v1/models"
+    else:
+        raise ValueError(f"unsupported remote action for vLLM main: {action}")
     if on_head(c):
         return run(["bash", "-lc", command])
     return ssh(c["head"], command)
@@ -103,10 +114,15 @@ def install_env(c, model=None):
     env = Path(__file__).resolve().parent / "dspark" / ".env"
     selected_model = model or c["model"]
     if selected_model != c["model"]:
-        raise ValueError(f"model must equal configured local path: {c['model']}")
+        raise ValueError(f"model must equal configured model path: {c['model']}")
     values = dict(c["env"])
-    values["MODEL_DIR"] = selected_model
-    required = ("MODEL_DIR", "WORKER_SSH", "HEAD_CX7_IP", "WORKER_CX7_IP", "HEAD_CX7_IF", "WORKER_CX7_IF")
+    required = (
+        "HEAD_IP", "WORKER_IP", "WORKER_SSH", "IFACE", "IB_HCA", "IB_GID_INDEX", "MODEL_ID", "MODEL_PATH",
+        "MODEL_ROOT", "CONTAINER_MODEL_ROOT", "MAX_MODEL_LEN", "GPU_MEMORY_UTILIZATION", "MAX_NUM_SEQS",
+        "MAX_NUM_BATCHED_TOKENS", "PORT", "TENSOR_PARALLEL_SIZE", "IMAGE",
+        "MASTER_PORT",
+    )
+    values["MODEL_PATH"] = selected_model
     missing = [key for key in required if key not in values]
     if missing:
         raise ValueError(f"config env missing required keys: {', '.join(missing)}")
@@ -123,15 +139,11 @@ def cmd_install(c, model=None):
     # 与 deepseek-flash 的 install 语义一致：install 是覆盖部署，始终先停旧容器。
     log("install is destructive to the running service: stopping existing containers")
     remote_script(c, "stop")
-    remote_script(c, "serve")
+    remote_script(c, "launch")
 
 
 def cmd_fetch(c, model=None):
-    expected = "RadixArk/Qwen3.8-Flash-Next-NVFP4"
-    if model and model != expected:
-        raise ValueError(f"fetch only supports the configured model: {expected}")
-    sync_source(c, c["head"])
-    remote_script(c, "download")
+    raise ValueError("vLLM offical/main assumes the model is already prepared; use install/restart with --launch")
 
 
 def cmd_uninstall(c):
@@ -204,7 +216,7 @@ def main(argv):
             return remote_script(c, "status").returncode
         if args.command == "restart":
             remote_script(c, "stop")
-            return remote_script(c, "serve").returncode
+            return remote_script(c, "launch").returncode
         if args.command == "logs":
             return remote_script(c, "logs", (args.node,)).returncode
         return remote_script(c, args.command).returncode
